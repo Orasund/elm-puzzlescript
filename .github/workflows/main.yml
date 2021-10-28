@@ -64,12 +64,12 @@ jobs:
         run: npx --no-install elm-tooling install
 
       # Finally, run whatever you want. For example:
-      
-      - name: elm-format
-        run: npx --no-install elm-format --validate src tests
 
       - name: elm make
         run: npx --no-install elm make src/Main.elm --output=/dev/null
+
+      - name: elm-verify-examples
+        run: npx --no-install elm-verify-examples
 
       - name: elm-test
         run: npx --no-install elm-test
