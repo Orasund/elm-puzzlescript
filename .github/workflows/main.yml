@@ -65,9 +65,6 @@ jobs:
 
       # Finally, run whatever you want. For example:
 
-      - name: elm make
-        run: npx --no-install elm make src/Main.elm --output=/dev/null
-
       - name: elm-verify-examples
         run: npx --no-install elm-verify-examples
 
