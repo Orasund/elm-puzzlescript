@@ -65,8 +65,5 @@ jobs:
 
       # Finally, run whatever you want. For example:
 
-      - name: elm-verify-examples
-        run: npx --no-install elm-verify-examples
-
       - name: elm-test
         run: npx --no-install elm-test
