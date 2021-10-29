@@ -1,9 +1,9 @@
 module PuzzleScript.Rule exposing
-    ( into, constant
-    , Pattern
+    ( into, spawn, kill, constant
+    , Pattern, touching, onLine, multiLine, fromPattern
+    , singleton, toString
     , Rule
-    , Transition, Touching, Line, MultiLine
-    , fromPattern, multiLine, onLine, toString, touching
+    , Transition, Touching, Line, MultiLine, LineOr
     )
 
 {-| Module for constructing PuzzleScript rules
@@ -11,12 +11,17 @@ module PuzzleScript.Rule exposing
 
 ## Transition
 
-@docs into, constant
+@docs into, spawn, kill, constant
 
 
 ## Pattern
 
-@docs Pattern
+@docs Pattern, touching, onLine, multiLine, fromPattern
+
+
+## Advanced
+
+@docs singleton, toString
 
 
 ## Rule
@@ -26,9 +31,20 @@ module PuzzleScript.Rule exposing
 
 ## Internal
 
-@docs Transition, Touching, Line, MultiLine
+@docs Transition, Touching, Line, MultiLine, LineOr
 
 -}
+
+
+type Direction
+    = Up
+    | Down
+    | Left
+    | Right
+
+
+type alias Element =
+    { object : String, direction : Direction }
 
 
 {-| Internal type.
@@ -51,20 +67,35 @@ type alias Rule =
 
 {-| Internal type representing a touching pattern
 -}
-type Touching
-    = Touching
+type alias Touching =
+    Tag
+        { noLine : ()
+        , noMultiLine : ()
+        }
 
 
 {-| Internal type representing a line pattern
 -}
-type Line
-    = Line
+type alias Line =
+    Tag { noMultiLine : () }
 
 
 {-| Internal type representing a multiline pattern
 -}
-type MultiLine
-    = MultiLine
+type alias MultiLine =
+    Tag
+        { isMultiline : ()
+        }
+
+
+type alias LineOr touching =
+    Tag { touching | noMultiLine : () }
+
+
+{-| Internal type.
+-}
+type Tag a
+    = Tag a
 
 
 {-| Pattern for a PuzzleScript Result.
@@ -100,6 +131,37 @@ into to from =
     ( Just from, Just to )
 
 
+{-| constructs a transition into nothing
+
+    "player" |> kill --> (Just "player", Nothing )
+
+-}
+kill : String -> Transition
+kill from =
+    ( Just from, Nothing )
+
+
+{-| constructs a transition from nothing
+
+    "monster" |> spawn --> (Nothing, Just "monster")
+
+-}
+spawn : String -> Transition
+spawn to =
+    ( Nothing, Just to )
+
+
+{-| constructs a pattern of a single object. This is useful in combination with `onLine`.
+
+    constant "player" |> singleton
+    --> constant "player" |> List.singleton |> touching
+
+-}
+singleton : Transition -> Pattern Touching
+singleton =
+    List.singleton >> touching
+
+
 {-| pattern of touching objects
 
     [ constant "fire", "tree" |> into "fire" ]
@@ -118,6 +180,17 @@ touching touchingPattern =
         }
 
 
+{-| pattern of objects on a straight line
+
+    [ touching [ "player" |> kill, constant "portal"]
+    , touching [ constant "portal", "player" |> spawn ]
+    ]
+      |> onLine
+      |> fromPattern
+      |> toString
+      --> "[ player | portal | ... | portal |  ] -> [  | portal | ... | portal | player ]"
+
+-}
 onLine : List (Pattern Touching) -> Pattern Line
 onLine list =
     Pattern
@@ -129,30 +202,53 @@ onLine list =
         }
 
 
-multiLine : List (Pattern Line) -> Pattern MultiLine
+{-| pattern of objects on different lines. These lines do not need to be next to each other.
+
+    [ [ "player" |> kill, constant "portal" ] |> touching
+    , [ constant "portal", "player" |> spawn ] |> touching
+    ]
+      |> multiLine
+      |> fromPattern
+      |> toString
+      --> "[ player | portal ][ portal |  ] -> [  | portal ][ portal | player ]"
+
+-}
+multiLine : List (Pattern (LineOr touching)) -> Pattern MultiLine
 multiLine list =
     Pattern
         { touchingPattern = []
         , linePattern = []
-        , multiPattern =
-            list
-                |> List.map (\(Pattern { linePattern }) -> linePattern)
+        , multiPattern = list |> List.map toLine
         }
 
 
+{-| convert any pattern into a rule.
+
+    constant "player"
+      |> singleton
+      |> fromPattern
+      |> toString
+      --> "[ player ] -> [ player ]"
+
+-}
 fromPattern : Pattern pattern -> Rule
 fromPattern (Pattern pattern) =
-    if pattern.multiPattern |> List.isEmpty then
-        if pattern.linePattern |> List.isEmpty then
-            pattern.touchingPattern |> List.singleton |> List.singleton
-
-        else
-            pattern.linePattern |> List.singleton
-
-    else
+    if pattern.multiPattern /= [] then
         pattern.multiPattern
 
+    else
+        Pattern pattern
+            |> toLine
+            |> List.singleton
 
+
+{-| converts a rule into a string.
+
+    []
+      |> toString
+      --> "[] -> []"
+
+-}
 toString : Rule -> String
 toString pattern =
     let
@@ -173,18 +269,31 @@ toString pattern =
 
 singlePatternToString : List (List (List (Maybe String))) -> String
 singlePatternToString list =
-    list
-        |> List.map
-            (\l ->
-                [ "[ "
-                , l
-                    |> List.map
-                        (List.map (Maybe.withDefault " ")
-                            >> String.join " | "
-                        )
-                    |> String.join " | ... | "
-                , " ]"
-                ]
-                    |> String.concat
-            )
-        |> String.join " "
+    if list == [] then
+        "[]"
+
+    else
+        list
+            |> List.map
+                (\l ->
+                    [ "[ "
+                    , l
+                        |> List.map
+                            (List.map (Maybe.withDefault "")
+                                >> String.join " | "
+                            )
+                        |> String.join " | ... | "
+                    , " ]"
+                    ]
+                        |> String.concat
+                )
+            |> String.join ""
+
+
+toLine : Pattern pattern -> List (List Transition)
+toLine (Pattern pattern) =
+    if pattern.linePattern /= [] then
+        pattern.linePattern
+
+    else
+        pattern.touchingPattern |> List.singleton
