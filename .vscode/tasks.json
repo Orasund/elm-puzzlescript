@@ -6,7 +6,7 @@
     {
       "label": "Run tests",
       "type": "shell",
-      "command": ".test.sh",
+      "command": "./test.sh",
       "windows": {
         "command": ".\\test.cmd"
       },
