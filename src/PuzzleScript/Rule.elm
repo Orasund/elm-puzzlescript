@@ -3,7 +3,7 @@ module PuzzleScript.Rule exposing
     , Direction, turningLeft, turningRight, backwards, forwards, horizontal, vertical, up, down, left, right
     , whileMoving, thenMoving, thenStopping
     , Pattern, layered, touching, onLine, multiLine
-    , Rule, fromPattern, DirectionalEval(..), withEval, toString
+    , Rule, fromPattern, withEval, toString
     , Transition, Element, Tag, Singleton, Layered, Touching, Line, MultiLine, LayeredOr, TouchingOrLayeredOr, LineOrTouchingOrLayeredOr
     )
 
@@ -32,7 +32,7 @@ module PuzzleScript.Rule exposing
 
 ## Rule
 
-@docs Rule, fromPattern, DirectionalEval, withEval, toString
+@docs Rule, fromPattern, withEval, toString
 
 
 ## Internal
@@ -49,6 +49,7 @@ type RelativeDirection
     | TurningRight
     | Backwards
     | Forwards
+    | Stationary
 
 
 {-| Directions independent of the player
@@ -64,15 +65,18 @@ type ExplicitDirection
 
 {-| Directions
 -}
-type Direction
-    = Relative RelativeDirection
-    | Explicit ExplicitDirection
+type Direction direction
+    = Direction
+        { relative : RelativeDirection
+        , explicit : ExplicitDirection
+        , isRelative : Bool
+        }
 
 
 {-| Internal type.
 -}
 type alias Element =
-    { object : String, direction : Maybe Direction }
+    { object : String, direction : Maybe (Direction ()) }
 
 
 {-| Internal type.
@@ -92,19 +96,8 @@ Use this module to construct a rule.
 type alias Rule =
     { pattern : List (List (List (List Transition)))
     , lateEvaluation : Bool
-    , directionalEvaluation : Maybe DirectionalEval
+    , directionalEvaluation : Maybe ExplicitDirection
     }
-
-
-{-| Internal type for restricting the evaluation
--}
-type DirectionalEval
-    = OnlyHorizontal
-    | OnlyVertical
-    | OnlyUp
-    | OnlyDown
-    | OnlyLeft
-    | OnlyRight
 
 
 {-| Internal type representing a singleton pattern
@@ -239,11 +232,11 @@ into to from =
     --> "[ > player ] -> [ > player ]"
 
 -}
-whileMoving : Direction -> Pattern Singleton -> Pattern Singleton
+whileMoving : Direction a -> Pattern Singleton -> Pattern Singleton
 whileMoving direction =
     let
         addDirection part =
-            { part | direction = Just direction }
+            { part | direction = Just <| toAnyDirection direction }
     in
     mapSingleton (Tuple.mapBoth (Maybe.map addDirection) (Maybe.map addDirection))
         >> addMovement
@@ -269,11 +262,11 @@ if there was no movement to begin with, then it will start moving
     --> "[ player ] -> [ < player ]"
 
 -}
-thenMoving : Direction -> Pattern Singleton -> Pattern Singleton
+thenMoving : Direction a -> Pattern Singleton -> Pattern Singleton
 thenMoving direction =
     let
         addDirection part =
-            { part | direction = Just direction }
+            { part | direction = Just <| toAnyDirection direction }
     in
     mapSingleton (Tuple.mapSecond (Maybe.map addDirection))
         >> addMovement
@@ -468,7 +461,7 @@ toString rule =
         ""
     )
         ++ (rule.directionalEvaluation
-                |> Maybe.map directionalEvalToString
+                |> Maybe.map (\explicit -> explicitDirectionToString explicit ++ " ")
                 |> Maybe.withDefault ""
            )
         ++ first
@@ -481,14 +474,14 @@ toString rule =
     constant "player"
     |> whileMoving forwards
     |> fromPattern
-    |> withEval OnlyVertical
+    |> withEval vertical
     |> toString
     --> "VERTICAL [ > player ] -> [ > player ]"
 
 -}
-withEval : DirectionalEval -> Rule -> Rule
-withEval directionalEvaluation rule =
-    { rule | directionalEvaluation = Just directionalEvaluation }
+withEval : Direction ExplicitDirection -> Rule -> Rule
+withEval (Direction { explicit }) rule =
+    { rule | directionalEvaluation = Just explicit }
 
 
 
@@ -498,63 +491,68 @@ withEval directionalEvaluation rule =
 
 
 {-| -}
-turningLeft : Direction
+turningLeft : Direction RelativeDirection
 turningLeft =
-    Relative TurningLeft
+    relativeDirection TurningLeft
 
 
 {-| -}
-turningRight : Direction
+turningRight : Direction RelativeDirection
 turningRight =
-    Relative TurningRight
+    relativeDirection TurningRight
 
 
 {-| -}
-backwards : Direction
+backwards : Direction RelativeDirection
 backwards =
-    Relative Backwards
+    relativeDirection Backwards
 
 
 {-| -}
-forwards : Direction
+forwards : Direction RelativeDirection
 forwards =
-    Relative Forwards
+    relativeDirection Forwards
+
+
+stationary : Direction RelativeDirection
+stationary =
+    relativeDirection Stationary
 
 
 {-| -}
-horizontal : Direction
+horizontal : Direction ExplicitDirection
 horizontal =
-    Explicit Horizontal
+    explicitDirection Horizontal
 
 
 {-| -}
-vertical : Direction
+vertical : Direction ExplicitDirection
 vertical =
-    Explicit Vertical
+    explicitDirection Vertical
 
 
 {-| -}
-up : Direction
+up : Direction ExplicitDirection
 up =
-    Explicit Up
+    explicitDirection Up
 
 
 {-| -}
-down : Direction
+down : Direction ExplicitDirection
 down =
-    Explicit Down
+    explicitDirection Down
 
 
 {-| -}
-left : Direction
+left : Direction ExplicitDirection
 left =
-    Explicit Left
+    explicitDirection Left
 
 
 {-| -}
-right : Direction
+right : Direction ExplicitDirection
 right =
-    Explicit Right
+    explicitDirection Right
 
 
 
@@ -563,62 +561,77 @@ right =
 --------------------------------------------------------------------------------
 
 
-directionalEvalToString : DirectionalEval -> String
-directionalEvalToString ruleSort =
-    (case ruleSort of
-        OnlyHorizontal ->
-            "HORIZONTAL"
+toAnyDirection : Direction a -> Direction ()
+toAnyDirection (Direction direction) =
+    Direction direction
 
-        OnlyVertical ->
-            "VERTICAL"
 
-        OnlyUp ->
+relativeDirection : RelativeDirection -> Direction RelativeDirection
+relativeDirection relative =
+    Direction
+        { relative = relative
+        , explicit = Right
+        , isRelative = True
+        }
+
+
+explicitDirection : ExplicitDirection -> Direction ExplicitDirection
+explicitDirection explicit =
+    Direction
+        { relative = Forwards
+        , explicit = explicit
+        , isRelative = False
+        }
+
+
+explicitDirectionToString : ExplicitDirection -> String
+explicitDirectionToString ruleSort =
+    case ruleSort of
+        Up ->
             "UP"
 
-        OnlyDown ->
+        Down ->
             "DOWN"
 
-        OnlyLeft ->
+        Left ->
             "LEFT"
 
-        OnlyRight ->
+        Right ->
             "RIGHT"
-    )
-        ++ " "
+
+        Horizontal ->
+            "HORIZONTAL"
+
+        Vertical ->
+            "VERTICAL"
 
 
-directionToString : Direction -> String
-directionToString direction =
-    case direction of
-        Relative TurningLeft ->
+relativeDirectionToString : RelativeDirection -> String
+relativeDirectionToString relative =
+    case relative of
+        TurningLeft ->
             "^"
 
-        Relative TurningRight ->
+        TurningRight ->
             "v"
 
-        Relative Backwards ->
+        Backwards ->
             "<"
 
-        Relative Forwards ->
+        Forwards ->
             ">"
 
-        Explicit Up ->
-            "UP"
+        Stationary ->
+            "STATIONARY"
 
-        Explicit Down ->
-            "DOWN"
 
-        Explicit Left ->
-            "LEFT"
+directionToString : Direction a -> String
+directionToString (Direction direction) =
+    if direction.isRelative then
+        relativeDirectionToString direction.relative
 
-        Explicit Right ->
-            "RIGHT"
-
-        Explicit Horizontal ->
-            "HORIZONTAL"
-
-        Explicit Vertical ->
-            "VERTICAL"
+    else
+        explicitDirectionToString direction.explicit
 
 
 elementToString : Element -> String
