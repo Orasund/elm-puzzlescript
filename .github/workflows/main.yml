@@ -65,8 +65,12 @@ jobs:
       
       # Finally, run whatever you want.
 
+      - name: generate docs
+        run: npx --no-install elm make --docs=docs.json
+        
       - name: elm-verify-examples
         run: npx elm-verify-examples
         
       - name: elm-test
         run: npx --no-install elm-test-rs
+
