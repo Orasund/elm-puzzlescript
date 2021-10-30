@@ -370,7 +370,7 @@ onLine list =
       |> multiLine
       |> fromPattern
       |> toString
-      --> "late [ > player | portal ][ portal |  ] -> [  | portal ][ portal | player ]"
+      --> "[ > player | portal ][ portal |  ] -> [  | portal ][ portal | player ]"
 
 -}
 multiLine : List (Pattern (LineOrTouchingOrLayeredOr singleton)) -> Pattern MultiLine
