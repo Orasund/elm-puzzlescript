@@ -1,6 +1,7 @@
 module PuzzleScript.Rule exposing
     ( into, spawn, kill, constant
-    , Direction(..), whileMoving, thenMoving, thenStopping
+    , Direction, turningLeft, turningRight, backwards, forwards, horizontal, vertical, up, down, left, right
+    , whileMoving, thenMoving, thenStopping
     , Pattern, layered, touching, onLine, multiLine
     , Rule, fromPattern, DirectionalEval(..), withEval, toString
     , Transition, Element, Tag, Singleton, Layered, Touching, Line, MultiLine, LayeredOr, TouchingOrLayeredOr, LineOrTouchingOrLayeredOr
@@ -14,9 +15,14 @@ module PuzzleScript.Rule exposing
 @docs into, spawn, kill, constant
 
 
+## Direction
+
+@docs Direction, turningLeft, turningRight, backwards, forwards, horizontal, vertical, up, down, left, right
+
+
 ## Moving Transition
 
-@docs Direction, whileMoving, thenMoving, thenStopping
+@docs whileMoving, thenMoving, thenStopping
 
 
 ## Pattern
@@ -36,17 +42,31 @@ module PuzzleScript.Rule exposing
 -}
 
 
-{-| Directions
+{-| Directions relative to the player
 -}
-type Direction
+type RelativeDirection
     = TurningLeft
     | TurningRight
     | Backwards
     | Forwards
+
+
+{-| Directions independent of the player
+-}
+type ExplicitDirection
+    = Horizontal
+    | Vertical
     | Up
     | Down
     | Left
     | Right
+
+
+{-| Directions
+-}
+type Direction
+    = Relative RelativeDirection
+    | Explicit ExplicitDirection
 
 
 {-| Internal type.
@@ -473,6 +493,72 @@ withEval directionalEvaluation rule =
 
 
 --------------------------------------------------------------------------------
+-- Direction
+--------------------------------------------------------------------------------
+
+
+{-| -}
+turningLeft : Direction
+turningLeft =
+    Relative TurningLeft
+
+
+{-| -}
+turningRight : Direction
+turningRight =
+    Relative TurningRight
+
+
+{-| -}
+backwards : Direction
+backwards =
+    Relative Backwards
+
+
+{-| -}
+forwards : Direction
+forwards =
+    Relative Forwards
+
+
+{-| -}
+horizontal : Direction
+horizontal =
+    Explicit Horizontal
+
+
+{-| -}
+vertical : Direction
+vertical =
+    Explicit Vertical
+
+
+{-| -}
+up : Direction
+up =
+    Explicit Up
+
+
+{-| -}
+down : Direction
+down =
+    Explicit Down
+
+
+{-| -}
+left : Direction
+left =
+    Explicit Left
+
+
+{-| -}
+right : Direction
+right =
+    Explicit Right
+
+
+
+--------------------------------------------------------------------------------
 -- Internal
 --------------------------------------------------------------------------------
 
@@ -504,29 +590,35 @@ directionalEvalToString ruleSort =
 directionToString : Direction -> String
 directionToString direction =
     case direction of
-        TurningLeft ->
+        Relative TurningLeft ->
             "^"
 
-        TurningRight ->
+        Relative TurningRight ->
             "v"
 
-        Backwards ->
+        Relative Backwards ->
             "<"
 
-        Forwards ->
+        Relative Forwards ->
             ">"
 
-        Up ->
+        Explicit Up ->
             "UP"
 
-        Down ->
+        Explicit Down ->
             "DOWN"
 
-        Left ->
+        Explicit Left ->
             "LEFT"
 
-        Right ->
+        Explicit Right ->
             "RIGHT"
+
+        Explicit Horizontal ->
+            "HORIZONTAL"
+
+        Explicit Vertical ->
+            "VERTICAL"
 
 
 elementToString : Element -> String
