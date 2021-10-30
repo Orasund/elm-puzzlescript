@@ -4,6 +4,16 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "build",
+      "type": "shell",
+      "command": "elm make --docs=docs.json",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+    }
+    {
       "label": "Run tests",
       "type": "shell",
       "command": "./test.sh",
@@ -13,8 +23,9 @@
       "group": "test",
       "presentation": {
         "reveal": "always",
-        "panel": "new"
-      }
+        "panel": "shared"
+      },
+      "dependsOn": "build"
     }
   ]
 }

@@ -2,8 +2,8 @@ module PuzzleScript.Rule exposing
     ( into, spawn, kill, constant
     , Direction(..), whileMoving, thenMoving, thenStopping
     , Pattern, layered, touching, onLine, multiLine
-    , Rule, fromPattern, fromTransition, toString
-    , Transition, Element, Touching, Line, MultiLine, TouchingOrLayeredOr, LineOrTouchingOrLayeredOr
+    , Rule, fromPattern, DirectionalEval, onlyEval, toString
+    , Transition, Element, Tag, Singleton, Layered, Touching, Line, MultiLine, LayeredOr, TouchingOrLayeredOr, LineOrTouchingOrLayeredOr
     )
 
 {-| Module for constructing PuzzleScript rules
@@ -26,12 +26,12 @@ module PuzzleScript.Rule exposing
 
 ## Rule
 
-@docs Rule, fromPattern, fromTransition, toString
+@docs Rule, fromPattern, DirectionalEval, onlyEval, toString
 
 
 ## Internal
 
-@docs Transition, Element, Layered, Touching, Line, MultiLine, TouchingOrLayeredOr, LineOrTouchingOrLayeredOr
+@docs Transition, Element, Tag, Singleton, Layered, Touching, Line, MultiLine, LayeredOr, TouchingOrLayeredOr, LineOrTouchingOrLayeredOr
 
 -}
 
@@ -66,13 +66,21 @@ Use this module to construct a rule.
 
 -}
 type alias Rule =
-    ( List (List (List (List Transition))), Maybe EvaluationSort )
+    { pattern : List (List (List (List Transition)))
+    , lateEvaluation : Bool
+    , directionalEvaluation : Maybe DirectionalEval
+    }
 
 
-{-| Internal type encoding the different sorts of rules
+{-| Internal type for restricting the evaluation
 -}
-type EvaluationSort
-    = Late
+type DirectionalEval
+    = Horizontal
+    | Vertical
+    | Up
+    | Down
+    | Left
+    | Right
 
 
 {-| Internal type representing a singleton pattern
@@ -167,7 +175,7 @@ That object will not move.
       |> constant
       |> fromPattern
       |> toString
-      --> "late [ player ] -> [ player ]"
+      --> "LATE [ player ] -> [ player ]"
 
 -}
 constant : String -> Pattern Singleton
@@ -186,7 +194,7 @@ constant object =
       |> into "star"
       |> fromPattern
       |> toString
-      --> "late [ player ] -> [ star ]"
+      --> "LATE [ player ] -> [ star ]"
 
 -}
 into : String -> String -> Pattern Singleton
@@ -274,7 +282,7 @@ thenStopping =
       |> kill
       |> fromPattern
       |> toString
-      --> "late [ player ] -> []"
+      --> "LATE [ player ] -> []"
 
 -}
 kill : String -> Pattern Singleton
@@ -291,7 +299,7 @@ kill from =
       |> spawn
       |> fromPattern
       |> toString
-      --> "late [] -> [ monster ]"
+      --> "LATE [] -> [ monster ]"
 
 -}
 spawn : String -> Pattern Singleton
@@ -306,7 +314,7 @@ spawn to =
       |> layered
       |> fromPattern
       |> toString
-      --> "late [ player mine ] -> []"
+      --> "LATE [ player mine ] -> []"
 
 -}
 layered : List (Pattern Singleton) -> Pattern Layered
@@ -324,7 +332,7 @@ layered list =
       |> touching
       |> fromPattern
       |> toString
-      --> "late [ fire | tree ] -> [ fire | fire ]"
+      --> "LATE [ fire | tree ] -> [ fire | fire ]"
 
 -}
 touching : List (Pattern (LayeredOr singleton)) -> Pattern Touching
@@ -393,19 +401,17 @@ multiLine list =
 -}
 fromPattern : Pattern pattern -> Rule
 fromPattern (Pattern pattern) =
-    ( if pattern.multiPattern /= [] then
-        pattern.multiPattern
+    { pattern =
+        if pattern.multiPattern /= [] then
+            pattern.multiPattern
 
-      else
-        Pattern pattern
-            |> toLine
-            |> List.singleton
-    , if pattern.hasMovement then
-        Nothing
-
-      else
-        Just Late
-    )
+        else
+            Pattern pattern
+                |> toLine
+                |> List.singleton
+    , lateEvaluation = not pattern.hasMovement
+    , directionalEvaluation = Nothing
+    }
 
 
 {-| converts a rule into a string.
@@ -414,11 +420,11 @@ fromPattern (Pattern pattern) =
       |> multiLine
       |> fromPattern
       |> toString
-      --> "late [] -> []"
+      --> "LATE [] -> []"
 
 -}
 toString : Rule -> String
-toString ( rule, evaluationSort ) =
+toString rule =
     let
         mapUnzip : (a -> ( b, c )) -> List a -> ( List b, List c )
         mapUnzip f =
@@ -426,17 +432,30 @@ toString ( rule, evaluationSort ) =
                 >> List.unzip
 
         ( first, second ) =
-            rule
+            rule.pattern
                 |> mapUnzip (mapUnzip (mapUnzip List.unzip))
                 |> Tuple.mapBoth singlePatternToString singlePatternToString
     in
-    (evaluationSort
-        |> Maybe.map evaluationSortToString
-        |> Maybe.withDefault ""
+    (if rule.lateEvaluation then
+        "LATE "
+
+     else
+        ""
     )
+        ++ (rule.directionalEvaluation
+                |> Maybe.map directionalEvalToString
+                |> Maybe.withDefault ""
+           )
         ++ first
         ++ " -> "
         ++ second
+
+
+{-| Restrict the evaluation to a specific set of directions
+-}
+onlyEval : DirectionalEval -> Rule -> Rule
+onlyEval directionalEvaluation rule =
+    { rule | directionalEvaluation = Just directionalEvaluation }
 
 
 
@@ -445,11 +464,26 @@ toString ( rule, evaluationSort ) =
 --------------------------------------------------------------------------------
 
 
-evaluationSortToString : EvaluationSort -> String
-evaluationSortToString ruleSort =
+directionalEvalToString : DirectionalEval -> String
+directionalEvalToString ruleSort =
     (case ruleSort of
-        Late ->
-            "late"
+        Horizontal ->
+            "HORIZONTAL"
+
+        Vertical ->
+            "VERTICAL"
+
+        Up ->
+            "UP"
+
+        Down ->
+            "DOWN"
+
+        Left ->
+            "LEFT"
+
+        Right ->
+            "RIGHT"
     )
         ++ " "
 
