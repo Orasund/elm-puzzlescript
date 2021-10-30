@@ -39,10 +39,10 @@ module PuzzleScript.Rule exposing
 {-| Directions
 -}
 type Direction
-    = Up
-    | Down
-    | Left
-    | Right
+    = TurningLeft
+    | TurningRight
+    | Backwards
+    | Forwards
 
 
 {-| Internal type.
@@ -194,7 +194,7 @@ into to from =
 
     "player"
     |> constant
-    |> whileMoving Right
+    |> whileMoving Forwards
     |> fromPattern
     |> toString
     --> "[ > player ] -> [ > player ]"
@@ -214,8 +214,8 @@ whileMoving direction =
 
     "player"
     |> constant
-    |> whileMoving Right
-    |> thenMoving Left
+    |> whileMoving Forwards
+    |> thenMoving Backwards
     |> fromPattern
     |> toString
     --> "[ > player ] -> [ < player ]"
@@ -224,7 +224,7 @@ if there was no movement to begin with, then it will start moving
 
     "player"
     |> constant
-    |> thenMoving Left
+    |> thenMoving Backwards
     |> fromPattern
     |> toString
     --> "[ player ] -> [ < player ]"
@@ -244,7 +244,7 @@ thenMoving direction =
 
     "player"
     |> constant
-    |> whileMoving Right
+    |> whileMoving Forwards
     |> thenStopping
     |> fromPattern
     |> toString
@@ -416,16 +416,16 @@ toString rule =
 directionToString : Direction -> String
 directionToString direction =
     case direction of
-        Up ->
+        TurningLeft ->
             "^"
 
-        Down ->
+        TurningRight ->
             "v"
 
-        Left ->
+        Backwards ->
             "<"
 
-        Right ->
+        Forwards ->
             ">"
 
 
