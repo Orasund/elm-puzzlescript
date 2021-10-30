@@ -66,7 +66,13 @@ Use this module to construct a rule.
 
 -}
 type alias Rule =
-    List (List (List (List Transition)))
+    ( List (List (List (List Transition))), Maybe EvaluationSort )
+
+
+{-| Internal type encoding the different sorts of rules
+-}
+type EvaluationSort
+    = Late
 
 
 {-| Internal type representing a singleton pattern
@@ -149,6 +155,7 @@ type Pattern a
         , touchingPattern : List (List Transition)
         , linePattern : List (List (List Transition))
         , multiPattern : List (List (List (List Transition)))
+        , hasMovement : Bool
         }
 
 
@@ -160,7 +167,7 @@ That object will not move.
       |> constant
       |> fromPattern
       |> toString
-      --> "[ player ] -> [ player ]"
+      --> "late [ player ] -> [ player ]"
 
 -}
 constant : String -> Pattern Singleton
@@ -179,7 +186,7 @@ constant object =
       |> into "star"
       |> fromPattern
       |> toString
-      --> "[ player ] -> [ star ]"
+      --> "late [ player ] -> [ star ]"
 
 -}
 into : String -> String -> Pattern Singleton
@@ -203,11 +210,11 @@ into to from =
 whileMoving : Direction -> Pattern Singleton -> Pattern Singleton
 whileMoving direction =
     let
-        addMovement part =
+        addDirection part =
             { part | direction = Just direction }
     in
-    Tuple.mapBoth (Maybe.map addMovement) (Maybe.map addMovement)
-        |> mapSingleton
+    mapSingleton (Tuple.mapBoth (Maybe.map addDirection) (Maybe.map addDirection))
+        >> addMovement
 
 
 {-| transitions into a new movement.
@@ -233,11 +240,11 @@ if there was no movement to begin with, then it will start moving
 thenMoving : Direction -> Pattern Singleton -> Pattern Singleton
 thenMoving direction =
     let
-        addMovement part =
+        addDirection part =
             { part | direction = Just direction }
     in
-    Tuple.mapSecond (Maybe.map addMovement)
-        |> mapSingleton
+    mapSingleton (Tuple.mapSecond (Maybe.map addDirection))
+        >> addMovement
 
 
 {-| stops the movement.
@@ -267,7 +274,7 @@ thenStopping =
       |> kill
       |> fromPattern
       |> toString
-      --> "[ player ] -> []"
+      --> "late [ player ] -> []"
 
 -}
 kill : String -> Pattern Singleton
@@ -284,7 +291,7 @@ kill from =
       |> spawn
       |> fromPattern
       |> toString
-      --> "[] -> [ monster ]"
+      --> "late [] -> [ monster ]"
 
 -}
 spawn : String -> Pattern Singleton
@@ -299,7 +306,7 @@ spawn to =
       |> layered
       |> fromPattern
       |> toString
-      --> "[ player mine ] -> []"
+      --> "late [ player mine ] -> []"
 
 -}
 layered : List (Pattern Singleton) -> Pattern Layered
@@ -307,6 +314,7 @@ layered list =
     Pattern
         { emptyPattern
             | layeredPattern = list |> List.map toSingleton
+            , hasMovement = list |> List.any hasMovement
         }
 
 
@@ -316,7 +324,7 @@ layered list =
       |> touching
       |> fromPattern
       |> toString
-      --> "[ fire | tree ] -> [ fire | fire ]"
+      --> "late [ fire | tree ] -> [ fire | fire ]"
 
 -}
 touching : List (Pattern (LayeredOr singleton)) -> Pattern Touching
@@ -324,18 +332,22 @@ touching list =
     Pattern
         { emptyPattern
             | touchingPattern = list |> List.map toLayered
+            , hasMovement = list |> List.any hasMovement
         }
 
 
 {-| pattern of objects on a straight line
 
-    [ touching [ "player" |> kill, constant "portal"]
+    [ [ "player" |> kill |> whileMoving Forwards
+      , constant "portal"
+      ]
+        |> touching
     , touching [ constant "portal", "player" |> spawn ]
     ]
       |> onLine
       |> fromPattern
       |> toString
-      --> "[ player | portal | ... | portal |  ] -> [  | portal | ... | portal | player ]"
+      --> "[ > player | portal | ... | portal |  ] -> [  | portal | ... | portal | player ]"
 
 -}
 onLine : List (Pattern (TouchingOrLayeredOr singleton)) -> Pattern Line
@@ -343,18 +355,22 @@ onLine list =
     Pattern
         { emptyPattern
             | linePattern = list |> List.map toTouching
+            , hasMovement = list |> List.any hasMovement
         }
 
 
 {-| pattern of objects on different lines. These lines do not need to be next to each other.
 
-    [ [ "player" |> kill, constant "portal" ] |> touching
+    [ [ "player" |> kill |> whileMoving Forwards
+      , constant "portal"
+      ]
+        |> touching
     , [ constant "portal", "player" |> spawn ] |> touching
     ]
       |> multiLine
       |> fromPattern
       |> toString
-      --> "[ player | portal ][ portal |  ] -> [  | portal ][ portal | player ]"
+      --> "late [ > player | portal ][ portal |  ] -> [  | portal ][ portal | player ]"
 
 -}
 multiLine : List (Pattern (LineOrTouchingOrLayeredOr singleton)) -> Pattern MultiLine
@@ -362,37 +378,47 @@ multiLine list =
     Pattern
         { emptyPattern
             | multiPattern = list |> List.map toLine
+            , hasMovement = list |> List.any hasMovement
         }
 
 
 {-| convert any pattern into a rule.
 
     constant "player"
+      |> whileMoving Forwards
       |> fromPattern
       |> toString
-      --> "[ player ] -> [ player ]"
+      --> "[ > player ] -> [ > player ]"
 
 -}
 fromPattern : Pattern pattern -> Rule
 fromPattern (Pattern pattern) =
-    if pattern.multiPattern /= [] then
+    ( if pattern.multiPattern /= [] then
         pattern.multiPattern
 
-    else
+      else
         Pattern pattern
             |> toLine
             |> List.singleton
+    , if pattern.hasMovement then
+        Nothing
+
+      else
+        Just Late
+    )
 
 
 {-| converts a rule into a string.
 
     []
+      |> multiLine
+      |> fromPattern
       |> toString
-      --> "[] -> []"
+      --> "late [] -> []"
 
 -}
 toString : Rule -> String
-toString rule =
+toString ( rule, evaluationSort ) =
     let
         mapUnzip : (a -> ( b, c )) -> List a -> ( List b, List c )
         mapUnzip f =
@@ -404,13 +430,28 @@ toString rule =
                 |> mapUnzip (mapUnzip (mapUnzip List.unzip))
                 |> Tuple.mapBoth singlePatternToString singlePatternToString
     in
-    first ++ " -> " ++ second
+    (evaluationSort
+        |> Maybe.map evaluationSortToString
+        |> Maybe.withDefault ""
+    )
+        ++ first
+        ++ " -> "
+        ++ second
 
 
 
 --------------------------------------------------------------------------------
 -- Internal
 --------------------------------------------------------------------------------
+
+
+evaluationSortToString : EvaluationSort -> String
+evaluationSortToString ruleSort =
+    (case ruleSort of
+        Late ->
+            "late"
+    )
+        ++ " "
 
 
 directionToString : Direction -> String
@@ -525,12 +566,24 @@ mapSingleton fun (Pattern pattern) =
     Pattern { pattern | singletonPattern = fun pattern.singletonPattern }
 
 
+addMovement : Pattern pattern -> Pattern pattern
+addMovement (Pattern pattern) =
+    Pattern
+        { pattern | hasMovement = True }
+
+
+hasMovement : Pattern pattern -> Bool
+hasMovement (Pattern pattern) =
+    pattern.hasMovement
+
+
 emptyPattern :
     { singletonPattern : Transition
     , layeredPattern : List Transition
     , touchingPattern : List (List Transition)
     , linePattern : List (List (List Transition))
     , multiPattern : List (List (List (List Transition)))
+    , hasMovement : Bool
     }
 emptyPattern =
     { singletonPattern = ( Nothing, Nothing )
@@ -538,4 +591,5 @@ emptyPattern =
     , touchingPattern = []
     , linePattern = []
     , multiPattern = []
+    , hasMovement = False
     }
