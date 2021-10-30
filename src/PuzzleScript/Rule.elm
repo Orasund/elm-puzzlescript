@@ -233,7 +233,7 @@ into to from =
 
     "player"
     |> constant
-    |> whileMoving Forwards
+    |> whileMoving forwards
     |> fromPattern
     |> toString
     --> "[ > player ] -> [ > player ]"
@@ -253,8 +253,8 @@ whileMoving direction =
 
     "player"
     |> constant
-    |> whileMoving Forwards
-    |> thenMoving Backwards
+    |> whileMoving forwards
+    |> thenMoving backwards
     |> fromPattern
     |> toString
     --> "[ > player ] -> [ < player ]"
@@ -263,7 +263,7 @@ if there was no movement to begin with, then it will start moving
 
     "player"
     |> constant
-    |> thenMoving Backwards
+    |> thenMoving backwards
     |> fromPattern
     |> toString
     --> "[ player ] -> [ < player ]"
@@ -283,7 +283,7 @@ thenMoving direction =
 
     "player"
     |> constant
-    |> whileMoving Forwards
+    |> whileMoving forwards
     |> thenStopping
     |> fromPattern
     |> toString
@@ -370,7 +370,7 @@ touching list =
 
 {-| pattern of objects on a straight line
 
-    [ [ "player" |> kill |> whileMoving Forwards
+    [ [ "player" |> kill |> whileMoving forwards
       , constant "portal"
       ]
         |> touching
@@ -393,7 +393,7 @@ onLine list =
 
 {-| pattern of objects on different lines. These lines do not need to be next to each other.
 
-    [ [ "player" |> kill |> whileMoving Forwards
+    [ [ "player" |> kill |> whileMoving forwards
       , constant "portal"
       ]
         |> touching
@@ -417,7 +417,7 @@ multiLine list =
 {-| convert any pattern into a rule.
 
     constant "player"
-      |> whileMoving Left
+      |> whileMoving left
       |> thenStopping
       |> fromPattern
       |> toString
@@ -479,7 +479,7 @@ toString rule =
 {-| Restrict the evaluation to a specific set of directions
 
     constant "player"
-    |> whileMoving Forwards
+    |> whileMoving forwards
     |> fromPattern
     |> withEval OnlyVertical
     |> toString
