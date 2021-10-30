@@ -1,9 +1,9 @@
 module PuzzleScript.Rule exposing
     ( into, spawn, kill, constant
     , Direction(..), whileMoving, thenMoving, thenStopping
-    , Pattern, touching, onLine, multiLine, singleton
+    , Pattern, layered, touching, onLine, multiLine, singleton
     , Rule, fromPattern, fromTransition, toString
-    , Transition, Element, Touching, Line, MultiLine, LineOr
+    , Transition, Element, Touching, Line, MultiLine, TouchingOr, LineOrTouchingOr
     )
 
 {-| Module for constructing PuzzleScript rules
@@ -21,7 +21,7 @@ module PuzzleScript.Rule exposing
 
 ## Pattern
 
-@docs Pattern, touching, onLine, multiLine, singleton
+@docs Pattern, layered, touching, onLine, multiLine, singleton
 
 
 ## Rule
@@ -31,11 +31,13 @@ module PuzzleScript.Rule exposing
 
 ## Internal
 
-@docs Transition, Element, Touching, Line, MultiLine, LineOr
+@docs Transition, Element, Layered, Touching, Line, MultiLine, TouchingOr, LineOrTouchingOr
 
 -}
 
 
+{-| Directions
+-}
 type Direction
     = Up
     | Down
@@ -64,7 +66,17 @@ Use this module to construct a rule.
 
 -}
 type alias Rule =
-    List (List (List Transition))
+    List (List (List (List Transition)))
+
+
+{-| Internal type representing a layered pattern
+-}
+type alias Layered =
+    Tag
+        { noTouching : ()
+        , noLine : ()
+        , noMultiLine : ()
+        }
 
 
 {-| Internal type representing a touching pattern
@@ -90,10 +102,16 @@ type alias MultiLine =
         }
 
 
-{-| Internal type representing either a `Line` or `Touching`
+{-| Internal type representing either a `Line`, `Touching` or `Layered`
 -}
-type alias LineOr touching =
-    Tag { touching | noMultiLine : () }
+type alias LineOrTouchingOr layered =
+    Tag { layered | noMultiLine : () }
+
+
+{-| Internal type representing either a `Touching` or `Layered`
+-}
+type alias TouchingOr layered =
+    Tag { layered | noLine : () }
 
 
 {-| Internal type.
@@ -109,9 +127,10 @@ A rule can be composed of multiple patterns
 -}
 type Pattern a
     = Pattern
-        { touchingPattern : List Transition
-        , linePattern : List (List Transition)
-        , multiPattern : List (List (List Transition))
+        { layeredPattern : List Transition
+        , touchingPattern : List (List Transition)
+        , linePattern : List (List (List Transition))
+        , multiPattern : List (List (List (List Transition)))
         }
 
 
@@ -191,12 +210,13 @@ if there was no movement to begin with, then it will start moving
 
 -}
 thenMoving : Direction -> Transition -> Transition
-thenMoving direction =
+thenMoving direction transition =
     let
         addMovement part =
             { part | direction = Just direction }
     in
-    Tuple.mapSecond (Maybe.map addMovement)
+    transition
+        |> Tuple.mapSecond (Maybe.map addMovement)
 
 
 {-| stops the movement.
@@ -211,12 +231,13 @@ thenMoving direction =
 
 -}
 thenStopping : Transition -> Transition
-thenStopping =
+thenStopping transition =
     let
         noMovement part =
             { part | direction = Nothing }
     in
-    Tuple.mapSecond (Maybe.map noMovement)
+    transition
+        |> Tuple.mapSecond (Maybe.map noMovement)
 
 
 {-| constructs a transition into nothing
@@ -230,7 +251,9 @@ thenStopping =
 -}
 kill : String -> Transition
 kill from =
-    ( Just { object = from, direction = Nothing }, Nothing )
+    ( Just { object = from, direction = Nothing }
+    , Nothing
+    )
 
 
 {-| constructs a transition from nothing
@@ -250,29 +273,38 @@ spawn to =
 {-| constructs a pattern of a single object. This is useful in combination with `onLine`.
 
     constant "player" |> singleton
-    --> constant "player" |> List.singleton |> touching
+    --> constant "player" |> List.singleton |> layered
 
 -}
-singleton : Transition -> Pattern Touching
+singleton : Transition -> Pattern Layered
 singleton =
-    List.singleton >> touching
+    List.singleton >> layered
+
+
+layered : List Transition -> Pattern Layered
+layered layeredPattern =
+    Pattern
+        { emptyPattern
+            | layeredPattern = layeredPattern
+        }
 
 
 {-| pattern of touching objects
 
-    [ constant "fire", "tree" |> into "fire" ]
+    [ constant "fire" , "tree" |> into "fire" ]
       |> touching
       |> fromPattern
       |> toString
       --> "[ fire | tree ] -> [ fire | fire ]"
 
 -}
-touching : List Transition -> Pattern Touching
-touching touchingPattern =
+touching : List (Pattern Layered) -> Pattern Touching
+touching list =
     Pattern
-        { touchingPattern = touchingPattern
-        , linePattern = []
-        , multiPattern = []
+        { emptyPattern
+            | touchingPattern =
+                list
+                    |> List.map (\(Pattern { layeredPattern }) -> layeredPattern)
         }
 
 
@@ -287,14 +319,11 @@ touching touchingPattern =
       --> "[ player | portal | ... | portal |  ] -> [  | portal | ... | portal | player ]"
 
 -}
-onLine : List (Pattern Touching) -> Pattern Line
+onLine : List (Pattern (TouchingOr layered)) -> Pattern Line
 onLine list =
     Pattern
-        { touchingPattern = []
-        , linePattern =
-            list
-                |> List.map (\(Pattern { touchingPattern }) -> touchingPattern)
-        , multiPattern = []
+        { emptyPattern
+            | linePattern = list |> List.map toTouching
         }
 
 
@@ -309,12 +338,11 @@ onLine list =
       --> "[ player | portal ][ portal |  ] -> [  | portal ][ portal | player ]"
 
 -}
-multiLine : List (Pattern (LineOr touching)) -> Pattern MultiLine
+multiLine : List (Pattern (LineOrTouchingOr layered)) -> Pattern MultiLine
 multiLine list =
     Pattern
-        { touchingPattern = []
-        , linePattern = []
-        , multiPattern = list |> List.map toLine
+        { emptyPattern
+            | multiPattern = list |> List.map toLine
         }
 
 
@@ -358,12 +386,16 @@ fromTransition =
 
 -}
 toString : Rule -> String
-toString pattern =
+toString rule =
     let
+        mapUnzip : (a -> ( b, c )) -> List a -> ( List b, List c )
+        mapUnzip f =
+            List.map f
+                >> List.unzip
+
         ( first, second ) =
-            pattern
-                |> List.map (List.map List.unzip >> List.unzip)
-                |> List.unzip
+            rule
+                |> mapUnzip (mapUnzip (mapUnzip List.unzip))
                 |> Tuple.mapBoth singlePatternToString singlePatternToString
     in
     first ++ " -> " ++ second
@@ -402,7 +434,13 @@ elementToString element =
         |> String.join " "
 
 
-singlePatternToString : List (List (List (Maybe Element))) -> String
+mapJoin : String -> (a -> String) -> List a -> String
+mapJoin sep fun =
+    List.map fun
+        >> String.join sep
+
+
+singlePatternToString : List (List (List (List (Maybe Element)))) -> String
 singlePatternToString list =
     case list of
         [] ->
@@ -413,26 +451,20 @@ singlePatternToString list =
                 |> List.map
                     (\l ->
                         case l of
-                            [] ->
-                                "[]"
-
-                            [ [] ] ->
-                                "[]"
-
-                            [ [ Nothing ] ] ->
+                            [ [ [ Nothing ] ] ] ->
                                 "[]"
 
                             _ ->
                                 [ "[ "
                                 , l
-                                    |> List.map
-                                        (List.map
-                                            (Maybe.map elementToString
-                                                >> Maybe.withDefault ""
+                                    |> mapJoin " | ... | "
+                                        (mapJoin " | "
+                                            (mapJoin " "
+                                                (Maybe.map elementToString
+                                                    >> Maybe.withDefault ""
+                                                )
                                             )
-                                            >> String.join " | "
                                         )
-                                    |> String.join " | ... | "
                                 , " ]"
                                 ]
                                     |> String.concat
@@ -440,10 +472,33 @@ singlePatternToString list =
                 |> String.join ""
 
 
-toLine : Pattern pattern -> List (List Transition)
+toLine : Pattern pattern -> List (List (List Transition))
 toLine (Pattern pattern) =
     if pattern.linePattern /= [] then
         pattern.linePattern
 
     else
-        pattern.touchingPattern |> List.singleton
+        toTouching (Pattern pattern) |> List.singleton
+
+
+toTouching : Pattern pattern -> List (List Transition)
+toTouching (Pattern pattern) =
+    if pattern.touchingPattern /= [] then
+        pattern.touchingPattern
+
+    else
+        pattern.layeredPattern |> List.singleton
+
+
+emptyPattern :
+    { layeredPattern : List Transition
+    , touchingPattern : List (List Transition)
+    , linePattern : List (List (List Transition))
+    , multiPattern : List (List (List (List Transition)))
+    }
+emptyPattern =
+    { layeredPattern = []
+    , touchingPattern = []
+    , linePattern = []
+    , multiPattern = []
+    }
