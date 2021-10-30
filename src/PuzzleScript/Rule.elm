@@ -2,7 +2,7 @@ module PuzzleScript.Rule exposing
     ( into, spawn, kill, constant
     , Direction(..), whileMoving, thenMoving, thenStopping
     , Pattern, layered, touching, onLine, multiLine
-    , Rule, fromPattern, DirectionalEval, onlyEval, toString
+    , Rule, fromPattern, DirectionalEval(..), withEval, toString
     , Transition, Element, Tag, Singleton, Layered, Touching, Line, MultiLine, LayeredOr, TouchingOrLayeredOr, LineOrTouchingOrLayeredOr
     )
 
@@ -26,7 +26,7 @@ module PuzzleScript.Rule exposing
 
 ## Rule
 
-@docs Rule, fromPattern, DirectionalEval, onlyEval, toString
+@docs Rule, fromPattern, DirectionalEval, withEval, toString
 
 
 ## Internal
@@ -43,6 +43,10 @@ type Direction
     | TurningRight
     | Backwards
     | Forwards
+    | Up
+    | Down
+    | Left
+    | Right
 
 
 {-| Internal type.
@@ -75,12 +79,12 @@ type alias Rule =
 {-| Internal type for restricting the evaluation
 -}
 type DirectionalEval
-    = Horizontal
-    | Vertical
-    | Up
-    | Down
-    | Left
-    | Right
+    = OnlyHorizontal
+    | OnlyVertical
+    | OnlyUp
+    | OnlyDown
+    | OnlyLeft
+    | OnlyRight
 
 
 {-| Internal type representing a singleton pattern
@@ -393,10 +397,11 @@ multiLine list =
 {-| convert any pattern into a rule.
 
     constant "player"
-      |> whileMoving Forwards
+      |> whileMoving Left
+      |> thenStopping
       |> fromPattern
       |> toString
-      --> "[ > player ] -> [ > player ]"
+      --> "[ LEFT player ] -> [ player ]"
 
 -}
 fromPattern : Pattern pattern -> Rule
@@ -452,9 +457,17 @@ toString rule =
 
 
 {-| Restrict the evaluation to a specific set of directions
+
+    constant "player"
+    |> whileMoving Forwards
+    |> fromPattern
+    |> withEval OnlyVertical
+    |> toString
+    --> "VERTICAL [ > player ] -> [ > player ]"
+
 -}
-onlyEval : DirectionalEval -> Rule -> Rule
-onlyEval directionalEvaluation rule =
+withEval : DirectionalEval -> Rule -> Rule
+withEval directionalEvaluation rule =
     { rule | directionalEvaluation = Just directionalEvaluation }
 
 
@@ -467,22 +480,22 @@ onlyEval directionalEvaluation rule =
 directionalEvalToString : DirectionalEval -> String
 directionalEvalToString ruleSort =
     (case ruleSort of
-        Horizontal ->
+        OnlyHorizontal ->
             "HORIZONTAL"
 
-        Vertical ->
+        OnlyVertical ->
             "VERTICAL"
 
-        Up ->
+        OnlyUp ->
             "UP"
 
-        Down ->
+        OnlyDown ->
             "DOWN"
 
-        Left ->
+        OnlyLeft ->
             "LEFT"
 
-        Right ->
+        OnlyRight ->
             "RIGHT"
     )
         ++ " "
@@ -502,6 +515,18 @@ directionToString direction =
 
         Forwards ->
             ">"
+
+        Up ->
+            "UP"
+
+        Down ->
+            "DOWN"
+
+        Left ->
+            "LEFT"
+
+        Right ->
+            "RIGHT"
 
 
 elementToString : Element -> String
