@@ -2,11 +2,10 @@ module PuzzleScript exposing (..)
 
 import PuzzleScript.Rule as Rule exposing (Rule)
 
-
 type alias PuzzleScript =
-    { title : String
-    , author : String
-    , homepage : String
+    { title :  String
+    , author :  String
+    , homepage :  String
     , objects : String
     , legend : String
     , sounds : String
@@ -19,9 +18,9 @@ type alias PuzzleScript =
 
 toString : PuzzleScript -> String
 toString puzzleScript =
-    [ "title" ++ puzzleScript.title
-    , "author" ++ puzzleScript.author
-    , "homepage" ++ puzzleScript.homepage
+    [ "title " ++ puzzleScript.title
+    , "author " ++ puzzleScript.author
+    , "homepage " ++ puzzleScript.homepage
     , ""
     , ""
     , "========"
