@@ -86,20 +86,36 @@ type Direction direction
         }
 
 
-instantiate : RelativeDirection -> Direction (NonRelative {})
-instantiate dir =
-    case dir of
-        TurningLeft ->
-            Up |> fromExplicit |> unsafe
+instantiate : NormalDirection -> RelativeDirection -> Direction (NonRelative {})
+instantiate to dir =
+    case to of
+        Right ->
+            case dir of
+                TurningLeft ->
+                    Up |> fromExplicit |> unsafe
 
-        TurningRight ->
-            Down |> fromNormal |> unsafe
+                TurningRight ->
+                    Down |> fromNormal |> unsafe
 
-        Backwards ->
-            Left |> fromExplicit |> unsafe
+                Backwards ->
+                    Left |> fromExplicit |> unsafe
 
-        Forwards ->
-            Right |> fromNormal |> unsafe
+                Forwards ->
+                    Right |> fromNormal |> unsafe
+
+        Down ->
+            case dir of
+                TurningLeft ->
+                    Right |> fromNormal |> unsafe
+
+                TurningRight ->
+                    Left |> fromExplicit |> unsafe
+
+                Backwards ->
+                    Up |> fromExplicit |> unsafe
+
+                Forwards ->
+                    Down |> fromNormal |> unsafe
 
 
 unsafe : Direction a -> Direction b

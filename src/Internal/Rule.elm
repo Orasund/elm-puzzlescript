@@ -25,8 +25,8 @@ mapDirection fun element =
     }
 
 
-instantiateTransition : Transition {} -> Transition (Direction.NonRelative {})
-instantiateTransition =
+instantiateTransition : NormalDirection -> Transition {} -> Transition (Direction.NonRelative {})
+instantiateTransition direction =
     let
         f =
             Maybe.map
@@ -34,7 +34,7 @@ instantiateTransition =
                     (\(Direction dir) ->
                         case dir.sort of
                             RelativeDirSort ->
-                                dir.relative |> Direction.instantiate
+                                dir.relative |> Direction.instantiate direction
 
                             _ ->
                                 Direction dir
@@ -44,22 +44,52 @@ instantiateTransition =
     Tuple.mapBoth f f
 
 
-applyRight : Rule {} (Maybe ExplicitDirection) -> Rule (Direction.NonRelative {}) NormalDirection
-applyRight rule =
+applyRight : Rule {} (Maybe (Direction.NonRelative {})) -> Rule (Direction.NonRelative {}) NormalDirection
+applyRight =
+    applyNormal Right
+
+
+applyDown : Rule {} (Maybe (Direction.NonRelative {})) -> Rule (Direction.NonRelative {}) NormalDirection
+applyDown =
+    applyNormal Down
+
+
+reverse : Rule {} (Maybe (Direction (Direction.NonRelative {}))) -> Rule {} (Maybe (Direction (Direction.NonRelative {})))
+reverse rule =
+    let
+        fun dir =
+            { pattern = rule.pattern |> Debug.todo "reverse"
+            , directionalEvaluation = dir |> Direction.fromNormal |> Direction.unsafe |> Just
+            , lateEvaluation = rule.lateEvaluation
+            }
+    in
+    case rule.directionalEvaluation |> Maybe.map (\(Direction d) -> ( d.sort, d.explicit )) of
+        Just ( Direction.ExplicitDirSort, Left ) ->
+            fun Right
+
+        Just ( Direction.ExplicitDirSort, Up ) ->
+            fun Down
+
+        _ ->
+            rule
+
+
+applyNormal : NormalDirection -> Rule {} (Maybe (Direction.NonRelative {})) -> Rule (Direction.NonRelative {}) NormalDirection
+applyNormal directionalEvaluation rule =
     { pattern =
         rule.pattern
             |> List.map
                 (List.map
                     (List.map
-                        (List.map instantiateTransition)
+                        (List.map (instantiateTransition directionalEvaluation))
                     )
                 )
-    , directionalEvaluation = Right
+    , directionalEvaluation = directionalEvaluation
     , lateEvaluation = rule.lateEvaluation
     }
 
 
-normalizeRule : Rule {} (Maybe ExplicitDirection) -> Rule (Direction.NonRelative {}) NormalDirection
+normalizeRule : Rule {} (Maybe (Direction (Direction.NonRelative {}))) -> Rule (Direction.NonRelative {}) NormalDirection
 normalizeRule rule =
     case rule.directionalEvaluation of
         _ ->

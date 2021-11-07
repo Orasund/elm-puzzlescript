@@ -107,7 +107,7 @@ Use this module to construct a rule.
 
 -}
 type alias Rule =
-    Internal.Rule.Rule {} (Maybe (Direction (Internal.Direction.NonRelative {})))
+    Internal.Rule.Rule {} (Maybe (Internal.Direction.Direction (Internal.Direction.NonRelative {})))
 
 
 {-| Internal type representing a singleton pattern
